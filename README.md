@@ -1,11 +1,8 @@
 # gollback
-[![tests](https://github.com/abhikvarma/gollback/actions/workflows/test.yml/badge.svg)](https://github.com/abhikvarma/gollback/actions/workflows/test.yml)
+[![go reference](https://pkg.go.dev/badge/github.com/abhikvarma/gollback.svg)](https://pkg.go.dev/github.com/abhikvarma/gollback#section-documentation) [![tests](https://github.com/abhikvarma/gollback/actions/workflows/test.yml/badge.svg)](https://github.com/abhikvarma/gollback/actions/workflows/test.yml)
 
 a simple [pgx](https://github.com/jackc/pgx) transaction manager that automatically rolls back on error.  
 supports timeouts and read-only transactions.
-
-## installation
-`go get github.com/abhikvarma/gollback`
 
 ## usage
 
