@@ -10,12 +10,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Conn provides a common interface for executing queries across different pgx connection types.
 type Conn interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, arguments ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, arguments ...any) pgx.Row
 }
 
+// ConnGetter returns a Conn for the current context.
+// If a transaction is in progress, it returns the transaction Conn, otherwise it returns the pool Conn.
 type ConnGetter func(ctx context.Context) Conn
 
 type TxnOptions struct {
@@ -37,6 +40,7 @@ func ReadOnly() TxnOption {
 	}
 }
 
+// TxnManager provides a way to run multiple queries in a transaction.
 type TxnManager interface {
 	RunInTxn(ctx context.Context, fn func(ctx context.Context) error, opts ...TxnOption) error
 }
@@ -57,6 +61,16 @@ func NewTxnProvider(pool *pgxpool.Pool) (TxnManager, ConnGetter) {
 	}
 }
 
+// RunInTxn runs the given function in a transaction.
+// A successful function completion will commit the transaction.
+// Any error returned from the function will lead to a rollback.
+//
+// This function does not support nested transactions. Any nesting will lead to the outer transaction being used, ignoring any TxnOptions passed.
+//
+// It supports the following TxnOptions
+// * WithTimeout - sets a timeout for the transaction. If the timeout is reached, the transaction will be rolled back.
+// If the function returns nil after the timeout has expired, the transaction will not be committed.
+// * ReadOnly - sets the transaction to read-only.
 func (tp *txnProvider) RunInTxn(ctx context.Context, fn func(ctx context.Context) error, opts ...TxnOption) error {
 	if _, ok := ctx.Value(txnKey{}).(pgx.Tx); ok {
 		slog.Warn("RunInTxn called inside existing transaction, reusing")
