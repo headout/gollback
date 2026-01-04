@@ -68,6 +68,9 @@ s.txnManager.Do(ctx, func(ctx context.Context) error {
     return s.userRepo.GetByID(ctx, 123)
 }, gollback.WithTimeout(5*time.Second))
 ```
+> [!IMPORTANT]
+> when a timeout is reached, the transaction is rolled back immediately, releasing database locks and connections. The function may continue running in the background until it completes or encounters the cancelled context. for long-running computations,                                            
+check ctx.Done() or ctx.Err() periodically to exit early.
 
 ### read-only transactions
 ```go
