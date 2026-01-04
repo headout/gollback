@@ -149,20 +149,22 @@ func TestRunInTxn_NestedReuse(t *testing.T) {
 	}
 }
 
-func TestRunInTxn_Timeout_AtCommit(t *testing.T) {
+func TestRunInTxn_Timeout_ImmediateRollback(t *testing.T) {
 	truncateTable(t)
 	txnManager, getConn := NewTxnProvider(testPool)
 	ctx := context.Background()
 
+	start := time.Now()
 	err := txnManager.RunInTxn(ctx, func(ctx context.Context) error {
 		conn := getConn(ctx)
 		_, err := conn.Exec(ctx, "INSERT INTO test_txn (value) VALUES ($1)", "timeout-test")
 		if err != nil {
 			return err
 		}
-		time.Sleep(500 * time.Millisecond) // exceed timeout
+		time.Sleep(5 * time.Second) // exceed timeout (100ms), but we should return immediately
 		return nil
 	}, WithTimeout(100*time.Millisecond))
+	elapsed := time.Since(start)
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -170,6 +172,10 @@ func TestRunInTxn_Timeout_AtCommit(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("expected DeadlineExceeded, got %v", err)
 	}
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("expected immediate return on timeout, but took %v", elapsed)
+	}
+	time.Sleep(50 * time.Millisecond)
 	if count := getRowCount(t); count != 0 {
 		t.Errorf("expected 0 rows (rolled back), got %d", count)
 	}

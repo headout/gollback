@@ -68,8 +68,8 @@ func NewTxnProvider(pool *pgxpool.Pool) (TxnManager, ConnGetter) {
 // This function does not support nested transactions. Any nesting will lead to the outer transaction being used, ignoring any TxnOptions passed.
 //
 // It supports the following TxnOptions
-// * WithTimeout - sets a timeout for the transaction. If the timeout is reached, the transaction will be rolled back.
-// If the function returns nil after the timeout has expired, the transaction will not be committed.
+// * WithTimeout - sets a timeout for the transaction. If the timeout is reached, the transaction will be rolled back immediately,
+// releasing database resources. The function may continue running in the background until it completes or encounters the cancelled context.
 // * ReadOnly - sets the transaction to read-only.
 func (tp *txnProvider) RunInTxn(ctx context.Context, fn func(ctx context.Context) error, opts ...TxnOption) error {
 	if _, ok := ctx.Value(txnKey{}).(pgx.Tx); ok {
@@ -96,32 +96,47 @@ func (tp *txnProvider) RunInTxn(ctx context.Context, fn func(ctx context.Context
 	txn, err := tp.pool.BeginTx(ctx, txOpts)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			slog.Warn("transaction begin failed due to time out")
+			slog.Warn("transaction begin failed due to timeout")
 		}
 		return TxnBeginError{Err: err}
 	}
 
 	ctx = context.WithValue(ctx, txnKey{}, txn)
 
-	if err := fn(ctx); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			slog.Warn("transaction closing due to timeout")
+	done := make(chan error, 1)
+	go func() {
+		done <- fn(ctx)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			rbCtx, rbCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer rbCancel()
+
+			if rbErr := txn.Rollback(rbCtx); rbErr != nil {
+				return TxnRollbackError{RollBackErr: rbErr, Cause: err}
+			}
+			return err
 		}
+
+		if err := txn.Commit(ctx); err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				slog.Warn("transaction commit failed due to timeout")
+			}
+			return TxnCommitError{Err: err}
+		}
+		return nil
+
+	case <-ctx.Done():
+		slog.Warn("transaction closing due to timeout")
 
 		rbCtx, rbCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer rbCancel()
 
 		if rbErr := txn.Rollback(rbCtx); rbErr != nil {
-			return TxnRollbackError{RollBackErr: rbErr, Cause: err}
+			return TxnRollbackError{RollBackErr: rbErr, Cause: ctx.Err()}
 		}
-		return err
+		return ctx.Err()
 	}
-
-	if err := txn.Commit(ctx); err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			slog.Warn("transaction commit failed due to time out")
-		}
-		return TxnCommitError{Err: err}
-	}
-	return nil
 }
