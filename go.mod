@@ -1,4 +1,4 @@
-module github.com/abhikvarma/gollback
+module github.com/headout/gollback
 
 go 1.24.0
 

@@ -1,5 +1,5 @@
 # gollback
-[![go reference](https://pkg.go.dev/badge/github.com/abhikvarma/gollback.svg)](https://pkg.go.dev/github.com/abhikvarma/gollback#section-documentation) [![tests](https://github.com/abhikvarma/gollback/actions/workflows/test.yml/badge.svg)](https://github.com/abhikvarma/gollback/actions/workflows/test.yml)
+[![go reference](https://pkg.go.dev/badge/github.com/headout/gollback.svg)](https://pkg.go.dev/github.com/headout/gollback#section-documentation) [![tests](https://github.com/headout/gollback/actions/workflows/test.yml/badge.svg)](https://github.com/headout/gollback/actions/workflows/test.yml)
 
 a simple [pgx](https://github.com/jackc/pgx) transaction manager that automatically rolls back on error.  
 supports timeouts and read-only transactions.
@@ -54,6 +54,7 @@ func (s *Service) CreatePost(ctx context.Context, userID int, post *Post) error 
         }
         return nil
     }
+}
 ```
 <br>
 
